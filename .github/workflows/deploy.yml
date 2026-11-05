@@ -1,5 +1,4 @@
 
-
 name: DeployGuard - Quality Gated Deployment
 
 on:
@@ -11,6 +10,7 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  security-events: write
 
 concurrency:
   group: pages
@@ -23,7 +23,7 @@ jobs:
 
     steps:
       - name: Checkout source code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -57,7 +57,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
- 
   deployment_gate:
     name: DeployGuard - Deployment Safety Decision
     needs: validate
@@ -81,28 +80,7 @@ jobs:
 
     steps:
       - name: Checkout source code
-        uses: actions/checkout@v6
-
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload website artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: .
-
-      - name: Deploy website
-        id: deployment
-        uses: actions/deploy-pages@v4
-
-
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-
-    steps:
-      - name: Checkout source code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
