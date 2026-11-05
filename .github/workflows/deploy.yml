@@ -1,8 +1,9 @@
-name: Validate and Deploy Website
+
+name: DeployGuard - Quality Gated Deployment
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature-deployguard]
   workflow_dispatch:
 
 permissions:
@@ -16,31 +17,112 @@ concurrency:
 
 jobs:
   validate:
+    name: DeployGuard - Validation and Security
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
-      - name: Validate website files
+        with:
+          fetch-depth: 0
+
+      - name: Check required files
         run: |
           test -f index.html
           test -f style.css
-          echo "Validation successful: required website files found."
+          echo "PASS: Required website files found."
 
-  deploy:
+      - name: Check files are not empty
+        run: |
+          test -s index.html
+          test -s style.css
+          echo "PASS: Website files are not empty."
+
+      - name: Validate HTML structure
+        run: |
+          grep -qi "<!doctype html>" index.html
+          grep -qi "<html" index.html
+          grep -qi "<head>" index.html
+          grep -qi "<body>" index.html
+          echo "PASS: Basic HTML structure verified."
+
+      - name: Check CSS connection
+        run: |
+          grep -q 'href="style.css"' index.html
+          echo "PASS: CSS stylesheet is connected."
+
+      - name: Scan for exposed secrets
+        uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  deployment_gate:
+    name: DeployGuard - Deployment Safety Decision
     needs: validate
     runs-on: ubuntu-latest
+
+    steps:
+      - name: Approve deployment
+        run: |
+          echo "All quality and security checks passed."
+          echo "DEPLOYMENT DECISION: APPROVED"
+          echo "Production deployment is authorized."
+
+  deploy:
+    name: DeployGuard - Production Deployment
+    needs: deployment_gate
+    runs-on: ubuntu-latest
+
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
+
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
+
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
+
       - name: Upload website artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: .
-      - name: Deploy to GitHub Pages
+
+      - name: Deploy website
         id: deployment
         uses: actions/deploy-pages@v4
+
+  health_check:
+    name: DeployGuard - Live Website Health Check
+    needs: deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check live website response
+        env:
+          SITE_URL: ${{ needs.deploy.outputs.page_url }}
+        run: |
+          echo "Checking live website: $SITE_URL"
+
+          for attempt in {1..12}; do
+            if curl -fsS "$SITE_URL" -o website.html; then
+              echo "PASS: Website responded successfully."
+              break
+            fi
+
+            if [ "$attempt" -eq 12 ]; then
+              echo "FAIL: Website did not respond after 12 attempts."
+              exit 1
+            fi
+
+            echo "Website not ready. Retrying in 10 seconds..."
+            sleep 10
+          done
+
+          grep -qi "<html" website.html
+          echo "PASS: HTML content received."
+          echo "DEPLOYGUARD HEALTH STATUS: HEALTHY"

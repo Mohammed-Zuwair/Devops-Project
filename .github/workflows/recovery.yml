@@ -1,0 +1,57 @@
+
+name: DeployGuard - Recovery System
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_sha:
+        description: "Commit SHA of the known-good version"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  recover:
+    name: DeployGuard - Restore Known-Good Version
+    runs-on: ubuntu-latest
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout known-good version
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_sha }}
+
+      - name: Verify recovery files
+        run: |
+          test -s index.html
+          test -s style.css
+          echo "PASS: Recovery version contains required files."
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload recovery artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - name: Restore known-good website
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Confirm recovery deployment
+        run: |
+          echo "RECOVERY STATUS: DEPLOYED"
+          echo "Restored commit: ${{ inputs.target_sha }}"
