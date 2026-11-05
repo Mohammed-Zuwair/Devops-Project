@@ -10,7 +10,6 @@ permissions:
   contents: read
   pages: write
   id-token: write
-  security-events: write
 
 concurrency:
   group: pages
@@ -74,6 +73,9 @@ jobs:
     needs: deployment_gate
     runs-on: ubuntu-latest
 
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
+
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -93,3 +95,34 @@ jobs:
       - name: Deploy website
         id: deployment
         uses: actions/deploy-pages@v4
+
+  health_check:
+    name: DeployGuard - Live Website Health Check
+    needs: deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check live website response
+        env:
+          SITE_URL: ${{ needs.deploy.outputs.page_url }}
+        run: |
+          echo "Checking live website: $SITE_URL"
+
+          for attempt in {1..12}; do
+            if curl -fsS "$SITE_URL" -o website.html; then
+              echo "PASS: Website responded successfully."
+              break
+            fi
+
+            if [ "$attempt" -eq 12 ]; then
+              echo "FAIL: Website did not respond after 12 attempts."
+              exit 1
+            fi
+
+            echo "Website not ready. Retrying in 10 seconds..."
+            sleep 10
+          done
+
+          grep -qi "<html" website.html
+          echo "PASS: HTML content received."
+          echo "DEPLOYGUARD HEALTH STATUS: HEALTHY"
