@@ -31,7 +31,7 @@ jobs:
           test -f index.html
           test -f style.css
           echo "PASS: Required website files found."
-                    test -f file-that-does-not-exist.txt
+                  
 
       - name: Check files are not empty
         run: |
